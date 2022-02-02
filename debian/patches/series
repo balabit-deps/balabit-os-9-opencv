@@ -1,0 +1,5 @@
+change_jquery.js_path
+face-no-download.patch
+cmake-dont-install-inexistent-files.patch
+debian_soversion.patch
+0001-Revert-core-ensure-is_trivially_copyable-for-simple-.patch

@@ -1,0 +1,291 @@
+From 66f923656b2b557fe4790fe2e227361571211888 Mon Sep 17 00:00:00 2001
+From: Steve Langasek <steve.langasek@canonical.com>
+Date: Sun, 5 Dec 2021 19:37:34 -0800
+Subject: [PATCH] Revert "core: ensure is_trivially_copyable for simple types"
+
+opencv on armhf has regressed, with failing autopkgtests from multiple
+reverse-dependencies showing incorrect behavior.  Reverting this commit works
+around the problem.
+
+This reverts commit eab2b9dc09570b141adeba3814f196a4efd8adb2.
+
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1953258
+---
+ modules/core/include/opencv2/core/types.hpp | 125 ++++++++++++++++----
+ modules/core/test/test_misc.cpp             |  23 ----
+ 2 files changed, 99 insertions(+), 49 deletions(-)
+
+Index: opencv-4.5.4+dfsg/modules/core/include/opencv2/core/types.hpp
+===================================================================
+--- opencv-4.5.4+dfsg.orig/modules/core/include/opencv2/core/types.hpp
++++ opencv-4.5.4+dfsg/modules/core/include/opencv2/core/types.hpp
+@@ -162,22 +162,16 @@
+     //! default constructor
+     Point_();
+     Point_(_Tp _x, _Tp _y);
+-#if (defined(__GNUC__) && __GNUC__ < 5)  // GCC 4.x bug. Details: https://github.com/opencv/opencv/pull/20837
++#if OPENCV_ABI_COMPATIBILITY < 500
+     Point_(const Point_& pt);
+-    Point_(Point_&& pt) CV_NOEXCEPT = default;
+-#elif OPENCV_ABI_COMPATIBILITY < 500
+-    Point_(const Point_& pt) = default;
+-    Point_(Point_&& pt) CV_NOEXCEPT = default;
++    Point_(Point_&& pt) CV_NOEXCEPT;
+ #endif
+     Point_(const Size_<_Tp>& sz);
+     Point_(const Vec<_Tp, 2>& v);
+ 
+-#if (defined(__GNUC__) && __GNUC__ < 5)  // GCC 4.x bug. Details: https://github.com/opencv/opencv/pull/20837
++#if OPENCV_ABI_COMPATIBILITY < 500
+     Point_& operator = (const Point_& pt);
+-    Point_& operator = (Point_&& pt) CV_NOEXCEPT = default;
+-#elif OPENCV_ABI_COMPATIBILITY < 500
+-    Point_& operator = (const Point_& pt) = default;
+-    Point_& operator = (Point_&& pt) CV_NOEXCEPT = default;
++    Point_& operator = (Point_&& pt) CV_NOEXCEPT;
+ #endif
+     //! conversion to another data type
+     template<typename _Tp2> operator Point_<_Tp2>() const;
+@@ -255,15 +249,15 @@
+     Point3_();
+     Point3_(_Tp _x, _Tp _y, _Tp _z);
+ #if OPENCV_ABI_COMPATIBILITY < 500
+-    Point3_(const Point3_& pt) = default;
+-    Point3_(Point3_&& pt) CV_NOEXCEPT = default;
++    Point3_(const Point3_& pt);
++    Point3_(Point3_&& pt) CV_NOEXCEPT;
+ #endif
+     explicit Point3_(const Point_<_Tp>& pt);
+     Point3_(const Vec<_Tp, 3>& v);
+ 
+ #if OPENCV_ABI_COMPATIBILITY < 500
+-    Point3_& operator = (const Point3_& pt) = default;
+-    Point3_& operator = (Point3_&& pt) CV_NOEXCEPT = default;
++    Point3_& operator = (const Point3_& pt);
++    Point3_& operator = (Point3_&& pt) CV_NOEXCEPT;
+ #endif
+     //! conversion to another data type
+     template<typename _Tp2> operator Point3_<_Tp2>() const;
+@@ -335,14 +329,14 @@
+     Size_();
+     Size_(_Tp _width, _Tp _height);
+ #if OPENCV_ABI_COMPATIBILITY < 500
+-    Size_(const Size_& sz) = default;
+-    Size_(Size_&& sz) CV_NOEXCEPT = default;
++    Size_(const Size_& sz);
++    Size_(Size_&& sz) CV_NOEXCEPT;
+ #endif
+     Size_(const Point_<_Tp>& pt);
+ 
+ #if OPENCV_ABI_COMPATIBILITY < 500
+-    Size_& operator = (const Size_& sz) = default;
+-    Size_& operator = (Size_&& sz) CV_NOEXCEPT = default;
++    Size_& operator = (const Size_& sz);
++    Size_& operator = (Size_&& sz) CV_NOEXCEPT;
+ #endif
+     //! the area (width*height)
+     _Tp area() const;
+@@ -444,15 +438,15 @@
+     Rect_();
+     Rect_(_Tp _x, _Tp _y, _Tp _width, _Tp _height);
+ #if OPENCV_ABI_COMPATIBILITY < 500
+-    Rect_(const Rect_& r) = default;
+-    Rect_(Rect_&& r) CV_NOEXCEPT = default;
++    Rect_(const Rect_& r);
++    Rect_(Rect_&& r) CV_NOEXCEPT;
+ #endif
+     Rect_(const Point_<_Tp>& org, const Size_<_Tp>& sz);
+     Rect_(const Point_<_Tp>& pt1, const Point_<_Tp>& pt2);
+ 
+ #if OPENCV_ABI_COMPATIBILITY < 500
+-    Rect_& operator = (const Rect_& r) = default;
+-    Rect_& operator = (Rect_&& r) CV_NOEXCEPT = default;
++    Rect_& operator = ( const Rect_& r );
++    Rect_& operator = ( Rect_&& r ) CV_NOEXCEPT;
+ #endif
+     //! the top-left corner
+     Point_<_Tp> tl() const;
+@@ -1186,11 +1180,13 @@
+ Point_<_Tp>::Point_(_Tp _x, _Tp _y)
+     : x(_x), y(_y) {}
+ 
+-#if (defined(__GNUC__) && __GNUC__ < 5)  // GCC 4.x bug. Details: https://github.com/opencv/opencv/pull/20837
+ template<typename _Tp> inline
+ Point_<_Tp>::Point_(const Point_& pt)
+     : x(pt.x), y(pt.y) {}
+-#endif
++
++template<typename _Tp> inline
++Point_<_Tp>::Point_(Point_&& pt) CV_NOEXCEPT
++    : x(std::move(pt.x)), y(std::move(pt.y)) {}
+ 
+ template<typename _Tp> inline
+ Point_<_Tp>::Point_(const Size_<_Tp>& sz)
+@@ -1200,14 +1196,19 @@
+ Point_<_Tp>::Point_(const Vec<_Tp,2>& v)
+     : x(v[0]), y(v[1]) {}
+ 
+-#if (defined(__GNUC__) && __GNUC__ < 5)  // GCC 4.x bug. Details: https://github.com/opencv/opencv/pull/20837
+ template<typename _Tp> inline
+ Point_<_Tp>& Point_<_Tp>::operator = (const Point_& pt)
+ {
+     x = pt.x; y = pt.y;
+     return *this;
+ }
+-#endif
++
++template<typename _Tp> inline
++Point_<_Tp>& Point_<_Tp>::operator = (Point_&& pt) CV_NOEXCEPT
++{
++    x = std::move(pt.x); y = std::move(pt.y);
++    return *this;
++}
+ 
+ template<typename _Tp> template<typename _Tp2> inline
+ Point_<_Tp>::operator Point_<_Tp2>() const
+@@ -1447,6 +1448,14 @@
+     : x(_x), y(_y), z(_z) {}
+ 
+ template<typename _Tp> inline
++Point3_<_Tp>::Point3_(const Point3_& pt)
++    : x(pt.x), y(pt.y), z(pt.z) {}
++
++template<typename _Tp> inline
++Point3_<_Tp>::Point3_(Point3_&& pt) CV_NOEXCEPT
++    : x(std::move(pt.x)), y(std::move(pt.y)), z(std::move(pt.z)) {}
++
++template<typename _Tp> inline
+ Point3_<_Tp>::Point3_(const Point_<_Tp>& pt)
+     : x(pt.x), y(pt.y), z(_Tp()) {}
+ 
+@@ -1467,6 +1476,20 @@
+ }
+ 
+ template<typename _Tp> inline
++Point3_<_Tp>& Point3_<_Tp>::operator = (const Point3_& pt)
++{
++    x = pt.x; y = pt.y; z = pt.z;
++    return *this;
++}
++
++template<typename _Tp> inline
++Point3_<_Tp>& Point3_<_Tp>::operator = (Point3_&& pt) CV_NOEXCEPT
++{
++    x = std::move(pt.x); y = std::move(pt.y); z = std::move(pt.z);
++    return *this;
++}
++
++template<typename _Tp> inline
+ _Tp Point3_<_Tp>::dot(const Point3_& pt) const
+ {
+     return saturate_cast<_Tp>(x*pt.x + y*pt.y + z*pt.z);
+@@ -1679,6 +1702,14 @@
+     : width(_width), height(_height) {}
+ 
+ template<typename _Tp> inline
++Size_<_Tp>::Size_(const Size_& sz)
++    : width(sz.width), height(sz.height) {}
++
++template<typename _Tp> inline
++Size_<_Tp>::Size_(Size_&& sz) CV_NOEXCEPT
++    : width(std::move(sz.width)), height(std::move(sz.height)) {}
++
++template<typename _Tp> inline
+ Size_<_Tp>::Size_(const Point_<_Tp>& pt)
+     : width(pt.x), height(pt.y) {}
+ 
+@@ -1689,6 +1720,20 @@
+ }
+ 
+ template<typename _Tp> inline
++Size_<_Tp>& Size_<_Tp>::operator = (const Size_<_Tp>& sz)
++{
++    width = sz.width; height = sz.height;
++    return *this;
++}
++
++template<typename _Tp> inline
++Size_<_Tp>& Size_<_Tp>::operator = (Size_<_Tp>&& sz) CV_NOEXCEPT
++{
++    width = std::move(sz.width); height = std::move(sz.height);
++    return *this;
++}
++
++template<typename _Tp> inline
+ _Tp Size_<_Tp>::area() const
+ {
+     const _Tp result = width * height;
+@@ -1799,6 +1844,14 @@
+     : x(_x), y(_y), width(_width), height(_height) {}
+ 
+ template<typename _Tp> inline
++Rect_<_Tp>::Rect_(const Rect_<_Tp>& r)
++    : x(r.x), y(r.y), width(r.width), height(r.height) {}
++
++template<typename _Tp> inline
++Rect_<_Tp>::Rect_(Rect_<_Tp>&& r) CV_NOEXCEPT
++    : x(std::move(r.x)), y(std::move(r.y)), width(std::move(r.width)), height(std::move(r.height)) {}
++
++template<typename _Tp> inline
+ Rect_<_Tp>::Rect_(const Point_<_Tp>& org, const Size_<_Tp>& sz)
+     : x(org.x), y(org.y), width(sz.width), height(sz.height) {}
+ 
+@@ -1812,6 +1865,26 @@
+ }
+ 
+ template<typename _Tp> inline
++Rect_<_Tp>& Rect_<_Tp>::operator = ( const Rect_<_Tp>& r )
++{
++    x = r.x;
++    y = r.y;
++    width = r.width;
++    height = r.height;
++    return *this;
++}
++
++template<typename _Tp> inline
++Rect_<_Tp>& Rect_<_Tp>::operator = ( Rect_<_Tp>&& r ) CV_NOEXCEPT
++{
++    x = std::move(r.x);
++    y = std::move(r.y);
++    width = std::move(r.width);
++    height = std::move(r.height);
++    return *this;
++}
++
++template<typename _Tp> inline
+ Point_<_Tp> Rect_<_Tp>::tl() const
+ {
+     return Point_<_Tp>(x,y);
+Index: opencv-4.5.4+dfsg/modules/core/test/test_misc.cpp
+===================================================================
+--- opencv-4.5.4+dfsg.orig/modules/core/test/test_misc.cpp
++++ opencv-4.5.4+dfsg/modules/core/test/test_misc.cpp
+@@ -798,27 +798,4 @@
+     }
+ }
+ 
+-
+-#if !(defined(__GNUC__) && __GNUC__ < 5)  // GCC 4.8 emits: 'is_trivially_copyable' is not a member of 'std'
+-TEST(Core_Types, trivially_copyable)
+-{
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::Complexd>::value);
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::Point>::value);
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::Point3f>::value);
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::Size>::value);
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::Range>::value);
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::Rect>::value);
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::RotatedRect>::value);
+-    //EXPECT_TRUE(std::is_trivially_copyable<cv::Scalar>::value);  // derived from Vec (Matx)
+-}
+-
+-TEST(Core_Types, trivially_copyable_extra)
+-{
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::KeyPoint>::value);
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::DMatch>::value);
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::TermCriteria>::value);
+-    EXPECT_TRUE(std::is_trivially_copyable<cv::Moments>::value);
+-}
+-#endif
+-
+ }} // namespace

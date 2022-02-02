@@ -1,0 +1,5 @@
+modules/python/src2/hdr_parser.pyc
+modules/java/generator/rst_parser.pyc
+modules/refman.rst
+modules/python/src2/__pycache__/
+.cache/

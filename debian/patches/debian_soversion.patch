@@ -1,0 +1,51 @@
+From: =?utf-8?q?Timo_R=C3=B6hling?= <roehling@debian.org>
+Date: Tue, 30 Nov 2021 13:23:06 +0100
+Subject: Add debian-specific suffix to SOVERSION
+
+---
+ cmake/OpenCVUtils.cmake   | 2 +-
+ cmake/OpenCVVersion.cmake | 4 ++--
+ modules/java/common.cmake | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/cmake/OpenCVUtils.cmake b/cmake/OpenCVUtils.cmake
+index d7097fd..72f45ac 100644
+--- a/cmake/OpenCVUtils.cmake
++++ b/cmake/OpenCVUtils.cmake
+@@ -1635,7 +1635,7 @@ endfunction()
+ macro(ocv_get_libname var_name)
+   get_filename_component(__libname "${ARGN}" NAME)
+   # libopencv_core.so.3.3 -> opencv_core
+-  string(REGEX REPLACE "^lib(.+)\\.(a|so|dll)(\\.[.0-9]+)?$" "\\1" __libname "${__libname}")
++  string(REGEX REPLACE "^lib(.+)\\.(a|so|dll)(\\.[.0-9]+)?d?$" "\\1" __libname "${__libname}")
+   # MacOSX: libopencv_core.3.3.1.dylib -> opencv_core
+   string(REGEX REPLACE "^lib(.+[^.0-9])\\.([.0-9]+\\.)?dylib$" "\\1" __libname "${__libname}")
+   set(${var_name} "${__libname}")
+diff --git a/cmake/OpenCVVersion.cmake b/cmake/OpenCVVersion.cmake
+index a2b4926..199d292 100644
+--- a/cmake/OpenCVVersion.cmake
++++ b/cmake/OpenCVVersion.cmake
+@@ -10,8 +10,8 @@ set(OPENCV_VERSION_PLAIN "${OPENCV_VERSION_MAJOR}.${OPENCV_VERSION_MINOR}.${OPEN
+ 
+ set(OPENCV_VERSION "${OPENCV_VERSION_PLAIN}${OPENCV_VERSION_STATUS}")
+ 
+-set(OPENCV_SOVERSION "${OPENCV_VERSION_MAJOR}.${OPENCV_VERSION_MINOR}")
+-set(OPENCV_LIBVERSION "${OPENCV_VERSION_MAJOR}.${OPENCV_VERSION_MINOR}.${OPENCV_VERSION_PATCH}")
++set(OPENCV_SOVERSION "${OPENCV_VERSION_MAJOR}.${OPENCV_VERSION_MINOR}d")
++set(OPENCV_LIBVERSION "${OPENCV_VERSION_MAJOR}.${OPENCV_VERSION_MINOR}.${OPENCV_VERSION_PATCH}d")
+ 
+ # create a dependency on the version file
+ # we never use the output of the following command but cmake will rerun automatically if the version file changes
+diff --git a/modules/java/common.cmake b/modules/java/common.cmake
+index 31f5528..612ed3a 100644
+--- a/modules/java/common.cmake
++++ b/modules/java/common.cmake
+@@ -2,7 +2,7 @@ if(ANDROID)
+   ocv_update(OPENCV_JAVA_LIB_NAME_SUFFIX "${OPENCV_VERSION_MAJOR}")
+   ocv_update(JAVA_INSTALL_ROOT "sdk/java")
+ else()
+-  ocv_update(OPENCV_JAVA_LIB_NAME_SUFFIX "${OPENCV_VERSION_MAJOR}${OPENCV_VERSION_MINOR}${OPENCV_VERSION_PATCH}")
++  ocv_update(OPENCV_JAVA_LIB_NAME_SUFFIX "${OPENCV_VERSION_MAJOR}${OPENCV_VERSION_MINOR}${OPENCV_VERSION_PATCH}d")
+ endif()
+ 
+ if(MSVC)
